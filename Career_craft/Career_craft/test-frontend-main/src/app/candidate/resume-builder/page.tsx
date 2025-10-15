@@ -50,7 +50,7 @@ import CandidateLayout from '@/components/layout/CandidateLayout';
 /* ============================
    Types
 ============================= */
-export interface PersonalInfo { name: string; email: string; phone: string; location: string; legalStatus: string; }
+export interface PersonalInfo { name: string; email: string; phone: string; location: string; legalStatus: string; linkedin?: string; }
 export interface ExperienceEntry { id: string; jobTitle: string; company: string; dates: string; description: string; }
 export interface EducationEntry { id: string; degree: string; institution: string; graduationYear: string; gpa: string; achievements: string; }
 export interface SkillCategory { id: string; category: string; skills_list: string; }
@@ -667,17 +667,81 @@ const PersonalForm = ({
           <Label>Location</Label>
           <Input value={data.location} onChange={(e) => onChange('location', e.target.value)} placeholder="City, State" />
         </div>
-        <div className="md:col-span-2">
-          <Label>Work Authorization</Label>
-          <Select value={data.legalStatus} onChange={(e) => onChange('legalStatus', e.target.value)}>
-            <option value="Prefer not to say">Prefer not to say</option>
-            <option value="US Citizen">US Citizen</option>
-            <option value="Green Card">Green Card</option>
-            <option value="H1B">H1B</option>
-            <option value="F1/OPT">F1/OPT</option>
-            <option value="Other">Other</option>
-          </Select>
+        {/* LinkedIn (NEW) */}
+        <div>
+          <Label>LinkedIn URL</Label>
+          <Input
+            value={data.linkedin || ''}
+            onChange={(e) => onChange('linkedin', e.target.value)}
+            placeholder="https://www.linkedin.com/in/your-handle"
+          />
         </div>
+
+
+    
+
+
+        <div className="md:col-span-2">
+          <Label>Visa Status</Label>
+
+          {(() => {
+            const baseOptions = [
+              'Prefer not to say',
+              'US Citizen',
+              'Green Card',
+              'H-1B',
+              'L-1',
+              'TN',
+              'F-1',
+              'F-1 Initial OPT',
+              'F-1 STEM OPT',
+              'CPT',
+              'H-4 EAD',
+              'EAD',
+              'Other',
+            ];
+
+            const currentVal = (data?.legalStatus || 'Prefer not to say').trim();
+            const hasCurrent = baseOptions.some((o) => o.toLowerCase() === currentVal.toLowerCase());
+            const options = hasCurrent ? baseOptions : [currentVal, ...baseOptions];
+
+            return (
+
+
+
+              <Select
+                value={currentVal}
+                onChange={(e) => onChange('legalStatus', e.target.value)}
+                className="
+                  w-full
+                  rounded-md
+                  border border-gray-300 bg-gray-100 text-gray-900
+                  dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100
+                  px-3 py-2
+                "
+              >
+                {options.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </Select>
+
+          
+
+
+
+
+
+
+
+
+
+            );
+          })()}
+        </div>
+
+
+
+        
       </div>
 
       <div className="space-y-2">
@@ -707,7 +771,7 @@ export default function ResumeBuilder() {
   const [activeSection, setActiveSection] = useState<string>('personal');
 
   const [resumeData, setResumeDataState] = useState<ResumeData>({
-    personal: { name: '', email: '', phone: '', location: '', legalStatus: 'Prefer not to say' },
+    personal: { name: '', email: '', phone: '', location: '', legalStatus: 'Prefer not to say',linkedin: '' },
     summary: '<p></p>',
     experience: [{ id: crypto.randomUUID(), jobTitle: '', company: '', dates: '', description: '<p></p>' }],
     education: [{ id: crypto.randomUUID(), degree: '', institution: '', graduationYear: '', gpa: '', achievements: '<p></p>' }],
@@ -933,43 +997,65 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
 
+
   const handleParseResume = async () => {
-  if (!resumeFile) {
-    toast.error("Choose a resume file first");
-    return;
-  }
-
-  setLoading(true);
-  const formData = new FormData();
-  formData.append("file", resumeFile);
-
-  try {
-    // NOTE: your API_BASE_URL already ends with /api in your file
-    const resp = await fetch(`${API_BASE_URL}/parse-resume`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || "Server responded with an error");
+    if (!resumeFile) {
+      toast.error("Choose a resume file first");
+      return;
     }
 
-    const result = await resp.json();
-    const normalized: ResumeData = normalizeResumeData(result.parsedData);
-    setResumeData((prev: ResumeData) => ({ ...prev, ...normalized }));// or setResumeDataState if that's your setter
+    setLoading(true);
 
-    toast.success("Resume parsed successfully!");
+    const formData = new FormData();
+    formData.append("file", resumeFile);
 
-    // allow selecting the same file again, but KEEP showing the name in our pill
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  } catch (e: any) {
-    console.error("parse-resume failed:", e);
-    toast.error(e.message || "Failed to parse resume");
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const resp = await fetch(`${API_BASE_URL}/parse-resume`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || "Server responded with an error");
+      }
+
+      const result = await resp.json();
+
+      // ✅ Normalize everything (this fills personal.legalStatus, linkedin, etc.)
+      const normalized: ResumeData = normalizeResumeData(result.parsedData || {});
+
+      // ✅ Replace the whole resumeData so nested fields aren’t left stale
+      setResumeData(normalized);
+
+      toast.success("Resume parsed successfully!");
+
+      // Optional: allow choosing the same file again (keeps your displayed name if you store it separately)
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e: any) {
+      console.error("parse-resume failed:", e);
+      toast.error(e.message || "Failed to parse resume");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const handleProfilePicChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files?.[0]) {
       const file = event.target.files[0];
@@ -1015,71 +1101,175 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     };
   }, [handleMouseMove, handleMouseUp]);
 
+
+
+
+
+  // --- Visa Status options + normalizer ----------------------------------------
+  const VISA_OPTIONS = [
+    'Prefer not to say',
+    'US Citizen',
+    'Green Card',
+    'H-1B',
+    'L-1',
+    'TN',
+    'F-1',
+    'F-1 Initial OPT',
+    'F-1 STEM OPT',
+    'CPT',
+    'H-4 EAD',
+    'EAD',
+    'Other',
+  ];
+
+  // small helper to update a personal field
+  const updatePersonalField = (key: keyof ResumeData['personal'], value: string) => {
+    setResumeData((d) => ({
+      ...d,
+      personal: { ...d.personal, [key]: value },
+    }));
+  };
+
+  // Normalize arbitrary strings to EXACT Select values above
+  const normalizeLegalStatus = (raw: any): string => {
+    const s = (raw ?? '').toString().trim();
+    if (!s) return 'Prefer not to say';
+
+    // strip leading labels like "Visa Status:" / "Work Authorization:"
+    const clean = s.replace(/^\s*(visa\s*status|work\s*authorization)\s*:\s*/i, '').trim();
+
+    // exact (case-insensitive) match first
+    const exact = VISA_OPTIONS.find((o) => o.toLowerCase() === clean.toLowerCase());
+    if (exact) return exact;
+
+    // heuristics → map to your Select values
+    const t = clean.toLowerCase().replace(/\./g, ''); // ignore dots (US vs U.S.)
+    if (/\b(us|united states)\s*citizen\b/.test(t) || /^citizen$/.test(t)) return 'US Citizen';
+    if (/green\s*card|permanent\s*resident|lawful\s*permanent/.test(t)) return 'Green Card';
+    if (/h[\s-]?1b/.test(t)) return 'H-1B';
+    if (/l[\s-]?1/.test(t)) return 'L-1';
+    if (/\btn\b/.test(t)) return 'TN';
+    if (/^f[\s-]?1$/.test(t)) return 'F-1';
+    if (/f[\s-]?1.*initial.*opt/.test(t) || /initial.*opt/.test(t)) return 'F-1 Initial OPT';
+    if (/f[\s-]?1.*stem.*opt/.test(t) || /stem.*opt/.test(t)) return 'F-1 STEM OPT';
+    if (/\bcpt\b/.test(t)) return 'CPT';
+    if (/h[\s-]?4.*ead/.test(t)) return 'H-4 EAD';
+    if (/\bead\b/.test(t)) return 'EAD';
+
+    // last resort
+    return 'Other';
+  };
+
+  // --- Main normalizer ----------------------------------------------------------
   const normalizeResumeData = (data: any): ResumeData => {
     const defaultHtmlValue = '<p></p>';
     const defaultPlainValue = '';
-    const normalized = { ...data };
+    const normalized: any = { ...data };
 
-    normalized.experience = Array.isArray(normalized.experience) ? normalized.experience : [];
-    normalized.education = Array.isArray(normalized.education) ? normalized.education : [];
-    normalized.skills = Array.isArray(normalized.skills) ? normalized.skills : [];
+    // Ensure arrays exist
+    normalized.experience     = Array.isArray(normalized.experience) ? normalized.experience : [];
+    normalized.education      = Array.isArray(normalized.education) ? normalized.education : [];
+    normalized.skills         = Array.isArray(normalized.skills) ? normalized.skills : [];
     normalized.certifications = Array.isArray(normalized.certifications) ? normalized.certifications : [];
-    normalized.publications = Array.isArray(normalized.publications) ? normalized.publications : [];
-    normalized.projects = Array.isArray(normalized.projects) ? normalized.projects : [];
+    normalized.publications   = Array.isArray(normalized.publications) ? normalized.publications : [];
+    normalized.projects       = Array.isArray(normalized.projects) ? normalized.projects : [];
+
+    // Personal (label cleanup + mapping to dropdown options)
+    const rawPersonal = normalized.personal ?? {};
+    const rawLinkedIn = typeof rawPersonal?.linkedin === 'string' ? rawPersonal.linkedin : '';
+    const cleanedLinkedIn = rawLinkedIn.replace(/^\s*linkedin\s*:\s*/i, '').trim();
 
     normalized.personal = {
-      name: typeof normalized.personal?.name === 'string' ? normalized.personal.name : '',
-      email: typeof normalized.personal?.email === 'string' ? normalized.personal.email : '',
-      phone: typeof normalized.personal?.phone === 'string' ? normalized.personal.phone : '',
-      location: typeof normalized.personal?.location === 'string' ? normalized.personal.location : '',
-      legalStatus: typeof normalized.personal?.legalStatus === 'string' ? normalized.personal.legalStatus : 'Prefer not to say',
+      name:     typeof rawPersonal?.name === 'string' ? rawPersonal.name : '',
+      email:    typeof rawPersonal?.email === 'string' ? rawPersonal.email : '',
+      phone:    typeof rawPersonal?.phone === 'string' ? rawPersonal.phone : '',
+      location: typeof rawPersonal?.location === 'string' ? rawPersonal.location : '',
+      legalStatus: normalizeLegalStatus(
+        rawPersonal?.legalStatus ??
+        rawPersonal?.visaStatus ??
+        rawPersonal?.workAuthorization ??
+        ''
+      ),
+      linkedin: cleanedLinkedIn,
     };
 
-    normalized.summary = typeof normalized.summary === 'string' ? (unescapeHtml(normalized.summary) || defaultHtmlValue) : defaultHtmlValue;
+    // Summary (rich text)
+    normalized.summary =
+      typeof normalized.summary === 'string'
+        ? (unescapeHtml(normalized.summary) || defaultHtmlValue)
+        : defaultHtmlValue;
 
+    // Experience
     normalized.experience = normalized.experience.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      jobTitle: typeof item.jobTitle === 'string' ? item.jobTitle : '',
-      company: typeof item.company === 'string' ? item.company : '',
-      dates: typeof item.dates === 'string' ? item.dates : '',
-      description: typeof item.description === 'string' ? (unescapeHtml(item.description) || defaultHtmlValue) : defaultHtmlValue,
+      id: item?.id || crypto.randomUUID(),
+      jobTitle: typeof item?.jobTitle === 'string' ? item.jobTitle : '',
+      company: typeof item?.company === 'string' ? item.company : '',
+      dates: typeof item?.dates === 'string' ? item.dates : '',
+      description:
+        typeof item?.description === 'string'
+          ? (unescapeHtml(item.description) || defaultHtmlValue)
+          : defaultHtmlValue,
     }));
+
+    // Education
     normalized.education = normalized.education.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      degree: typeof item.degree === 'string' ? item.degree : '',
-      institution: typeof item.institution === 'string' ? item.institution : '',
-      graduationYear: typeof item.graduationYear === 'string' ? item.graduationYear : '',
-      gpa: typeof item.gpa === 'string' ? item.gpa : '',
-      achievements: typeof item.achievements === 'string' ? (unescapeHtml(item.achievements) || defaultHtmlValue) : defaultHtmlValue,
+      id: item?.id || crypto.randomUUID(),
+      degree: typeof item?.degree === 'string' ? item.degree : '',
+      institution: typeof item?.institution === 'string' ? item.institution : '',
+      graduationYear: typeof item?.graduationYear === 'string' ? item.graduationYear : '',
+      gpa: typeof item?.gpa === 'string' ? item.gpa : '',
+      achievements:
+        typeof item?.achievements === 'string'
+          ? (unescapeHtml(item.achievements) || defaultHtmlValue)
+          : defaultHtmlValue,
     }));
+
+    // Skills
     normalized.skills = normalized.skills.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      category: typeof item.category === 'string' ? item.category : '',
-      skills_list: typeof item.skills_list === 'string' ? (item.skills_list || defaultPlainValue) : defaultPlainValue,
+      id: item?.id || crypto.randomUUID(),
+      category: typeof item?.category === 'string' ? item.category : '',
+      skills_list: typeof item?.skills_list === 'string' ? (item.skills_list || defaultPlainValue) : defaultPlainValue,
     }));
+
+    // Projects
     normalized.projects = normalized.projects.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      title: typeof item.title === 'string' ? item.title : '',
-      date: typeof item.date === 'string' ? item.date : '',
-      description: typeof item.description === 'string' ? (unescapeHtml(item.description) || defaultHtmlValue) : defaultHtmlValue,
+      id: item?.id || crypto.randomUUID(),
+      title: typeof item?.title === 'string' ? item.title : '',
+      date: typeof item?.date === 'string' ? item.date : '',
+      description:
+        typeof item?.description === 'string'
+          ? (unescapeHtml(item.description) || defaultHtmlValue)
+          : defaultHtmlValue,
     }));
+
+    // Publications
     normalized.publications = normalized.publications.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      title: typeof item.title === 'string' ? item.title : '',
-      authors: typeof item.authors === 'string' ? item.authors : '',
-      journal: typeof item.journal === 'string' ? item.journal : '',
-      date: typeof item.date === 'string' ? item.date : '',
-      link: typeof item.link === 'string' ? item.link : '',
+      id: item?.id || crypto.randomUUID(),
+      title: typeof item?.title === 'string' ? item.title : '',
+      authors: typeof item?.authors === 'string' ? item.authors : '',
+      journal: typeof item?.journal === 'string' ? item.journal : '',
+      date: typeof item?.date === 'string' ? item.date : '',
+      link: typeof item?.link === 'string' ? item.link : '',
     }));
+
+    // Certifications
     normalized.certifications = normalized.certifications.map((item: any) => ({
-      id: item.id || crypto.randomUUID(),
-      name: typeof item.name === 'string' ? item.name : '',
-      issuer: typeof item.issuer === 'string' ? item.issuer : '',
-      date: typeof item.date === 'string' ? item.date : '',
+      id: item?.id || crypto.randomUUID(),
+      name: typeof item?.name === 'string' ? item.name : '',
+      issuer: typeof item?.issuer === 'string' ? item.issuer : '',
+      date: typeof item?.date === 'string' ? item.date : '',
     }));
 
     return normalized as ResumeData;
   };
+
+
+
+
+
+
+
+
 
   const handleEnhance = async (context: EnhancementContext) => {
     let textToEnhance = '';
@@ -1538,13 +1728,41 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setLoading(false);
     }
   };
+/* ===== Preview Renderer ===== */
+
 
   /* ===== Preview Renderer ===== */
   const renderResumePreview = () => {
     const { personal, summary, experience, education, skills, certifications, publications, projects } = resumeData;
-    const contactDetails = [personal.email, personal.phone, personal.location, personal.legalStatus !== 'Prefer not to say' ? personal.legalStatus : null]
-      .filter(Boolean)
-      .join(' | ');
+
+    // Build contact line with LinkedIn between location and visa status
+    const contactParts: React.ReactNode[] = [];
+    if (personal.email) contactParts.push(personal.email);
+    if (personal.phone) contactParts.push(personal.phone);
+    if (personal.location) contactParts.push(personal.location);
+
+    if (personal.linkedin) {
+      const raw = (personal.linkedin || '').trim();
+      const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      // show the actual URL (without the protocol) as the label
+      const label = href.replace(/^https?:\/\//i, '');
+      contactParts.push(
+        <a
+          key="linkedin"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline break-all"
+        >
+          {label}
+        </a>
+      );
+    }
+
+
+    if (personal.legalStatus && personal.legalStatus !== 'Prefer not to say') {
+      contactParts.push(`Visa Status: ${personal.legalStatus}`);
+    }
 
     return (
       <div
@@ -1568,16 +1786,30 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             <h2 className="text-4xl font-bold" style={{ color: styleOptions.accentColor }}>
               {personal.name || 'Your Name'}
             </h2>
-            <p className="text-gray-600 mt-2">{contactDetails}</p>
+            <p className="text-gray-600 mt-2">
+              {contactParts.map((part, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && ' | '}
+                  {part}
+                </React.Fragment>
+              ))}
+            </p>
           </div>
           {profilePic.preview && (
-            <img src={profilePic.preview} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-gray-200" />
+            <img
+              src={profilePic.preview}
+              alt="Profile"
+              className="w-24 h-24 rounded-full object-cover border-2 border-gray-200"
+            />
           )}
         </div>
 
         {(summary || '').trim() && (
           <div key="summary-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Summary
             </h3>
             <div className="text-gray-700" dangerouslySetInnerHTML={{ __html: summary || '' }} />
@@ -1586,7 +1818,10 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {(experience || []).some((e) => (e.jobTitle || '').trim() || (e.description || '').trim()) && (
           <div key="experience-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Experience
             </h3>
             {(experience || []).map((exp) => (
@@ -1605,7 +1840,10 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {(education || []).some((e) => (e.degree || '').trim() || (e.achievements || '').trim()) && (
           <div key="education-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Education
             </h3>
             {(education || []).map((edu) => (
@@ -1625,7 +1863,10 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {(skills || []).some((e) => (e.category || '').trim() || (e.skills_list || '').trim()) && (
           <div key="skills-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Skills
             </h3>
             {(skills || []).map((skill) => (
@@ -1652,7 +1893,10 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {(projects || []).some((proj) => (proj.title || '').trim() || (proj.description || '').trim()) && (
           <div key="projects-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Projects
             </h3>
             {(projects || []).map((proj) => (
@@ -1668,7 +1912,10 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {(publications || []).some((e) => (e.title || '').trim()) && (
           <div key="publications-section" className="mb-4">
-            <h3 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2" style={{ color: styleOptions.accentColor }}>
+            <h3
+              className="text-lg font-semibold border-b border-gray-300 pb-1 mb-2"
+              style={{ color: styleOptions.accentColor }}
+            >
               Publications
             </h3>
             {(publications || []).map((pub) => (
@@ -1709,6 +1956,9 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       </div>
     );
   };
+
+
+  
 
   const sections = [
     { id: 'personal', name: 'Personal', icon: <User size={16} /> },

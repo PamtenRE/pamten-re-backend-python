@@ -95,3 +95,29 @@ body {
   margin: 0.25rem 0;
 }
 
+/* Select surface: light/dark */
+select {
+  background-color: #f3f4f6;     /* bg-gray-100 */
+  color: #111827;                /* text-gray-900 */
+  border-color: #d1d5db;         /* border-gray-300 */
+}
+
+.dark select {
+  background-color: #3f3f46;     /* bg-zinc-700 */
+  color: #e5e7eb;                /* text-zinc-200 */
+  border-color: #52525b;         /* border-zinc-600 */
+}
+
+/* Ensure the dropdown items match the control */
+select option {
+  background-color: #f3f4f6;     /* light */
+  color: #111827;
+}
+
+.dark select option {
+  background-color: #3f3f46;     /* dark */
+  color: #e5e7eb;
+}
+
+
+

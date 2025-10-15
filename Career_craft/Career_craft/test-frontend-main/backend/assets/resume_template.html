@@ -137,14 +137,42 @@
 
     <p class="contact">
       {% set parts = [] %}
+
+      {# email, phone #}
       {% if personal.email %}{% set _ = parts.append(personal.email) %}{% endif %}
       {% if personal.phone %}{% set _ = parts.append(personal.phone) %}{% endif %}
+
+      {# location #}
       {% if personal.location %}{% set _ = parts.append(personal.location) %}{% endif %}
-      {% if personal.legalStatus and personal.legalStatus != 'Prefer not to say' %}
-        {% set _ = parts.append(personal.legalStatus) %}
+
+      {# LinkedIn (right after location). Show the actual URL as text. #}
+      {% if personal.linkedin %}
+        {% set ln = personal.linkedin %}
+        {# ensure it has a protocol for href #}
+        {% if '://' not in ln %}{% set ln = 'https://' ~ ln %}{% endif %}
+        {# label without protocol #}
+        {% set label = ln|replace('https://','')|replace('http://','') %}
+        {% set _ = parts.append('<a href="' ~ ln ~ '" target="_blank" rel="noopener noreferrer" style="word-break:break-all;">' ~ label|e ~ '</a>') %}
       {% endif %}
-      {{ parts | join(' | ') }}
+
+
+
+
+
+      {# visa status (last) #}
+      {% set vs = (personal.legalStatus or '') %}
+      {# strip a leading "Visa Status: " if it somehow slips through #}
+      {% set vs = vs.replace('Visa Status: ', '') %}
+      {% if vs and vs != 'Prefer not to say' %}
+        {% set _ = parts.append('Visa Status: ' ~ vs) %}
+      {% endif %}
+
+
+
+      {{ parts | join(' | ') | safe }}
     </p>
+    
+
   </div>
 
   <!-- Summary -->
