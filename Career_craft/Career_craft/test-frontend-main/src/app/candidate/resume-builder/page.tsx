@@ -77,6 +77,7 @@ type EnhancementContext =
 
 export interface StyleOptions { fontFamily: string; fontSize: number; accentColor: string; }
 
+
 /* ============================
    UI Primitives
 ============================= */
@@ -641,12 +642,14 @@ const PersonalForm = ({
   onPicChange,
   onPicRemove,
   picPreview,
+  inputRef, // NEW
 }: {
   data: PersonalInfo;
   onChange: (field: keyof PersonalInfo, value: string) => void;
   onPicChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPicRemove: () => void;
-  picPreview?: string;
+  picPreview?: string | null;                       // (optional) allow null too
+  inputRef: React.RefObject<HTMLInputElement | null>; // ⬅️ allow null here
 }) => {
   return (
     <div className="space-y-4">
@@ -725,32 +728,38 @@ const PersonalForm = ({
                 ))}
               </Select>
 
-          
-
-
-
-
-
-
-
-
-
             );
           })()}
         </div>
-
-
-
         
       </div>
 
-      <div className="space-y-2">
+      {/* Profile Picture */}
+      <div>
         <Label>Profile Picture</Label>
         <div className="flex items-center gap-3">
-          <Input type="file" accept="image/*" onChange={onPicChange} />
-          {picPreview && (
+          <input
+            ref={inputRef}              // was: profilePicInputRef
+            type="file"
+            accept="image/*"
+            onChange={onPicChange}      // was: handleProfilePicChange
+              className="
+                block w-full text-sm cursor-pointer
+                file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2
+                file:bg-gray-700 file:text-white file:cursor-pointer
+                hover:file:bg-gray-600
+                dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700
+                focus:outline-none focus:ring-2 focus:ring-indigo-500/40
+              "
+          />
+
+          {picPreview && (              // was: profilePic.preview
             <>
-              <img src={picPreview} alt="Preview" className="h-12 w-12 object-cover rounded-full border border-white/20" />
+              <img
+                src={picPreview}
+                alt="Preview"
+                className="h-12 w-12 object-cover rounded-full border border-white/20"
+              />
               <Button variant="destructive" size="sm" onClick={onPicRemove}>
                 Remove
               </Button>
@@ -795,7 +804,28 @@ export default function ResumeBuilder() {
 
 
   const [loading, setLoading] = useState<boolean>(false);
-  const [profilePic, setProfilePic] = useState<{ preview: string; file: File | null }>({ preview: '', file: null });
+  // --- Profile picture state & refs ---
+  type ProfilePicState = {
+    file: File | null;
+    preview: string | null;   // data-url or object url for preview
+    objectUrl: string | null; // track to revoke when removed/replaced
+  };
+
+  const [profilePic, setProfilePic] = useState<ProfilePicState>({
+    file: null,
+    preview: null,
+    objectUrl: null,
+  });
+
+  const profilePicInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Revoke object URL when it changes / on unmount
+  useEffect(() => {
+    return () => {
+      if (profilePic.objectUrl) URL.revokeObjectURL(profilePic.objectUrl);
+    };
+  }, [profilePic.objectUrl]);
+
   const [showPamtenLogo, setShowPamtenLogo] = useState<boolean>(false);
   const [showEnhancementModal, setShowEnhancementModal] = useState<boolean>(false);
   const [enhancementVersions, setEnhancementVersions] = useState<string[]>([]);
@@ -1022,15 +1052,19 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
       const result = await resp.json();
 
-      // ✅ Normalize everything (this fills personal.legalStatus, linkedin, etc.)
+      // Normalize everything
       const normalized: ResumeData = normalizeResumeData(result.parsedData || {});
-
-      // ✅ Replace the whole resumeData so nested fields aren’t left stale
       setResumeData(normalized);
+
+      // 🔽🔽🔽 CLEAR PROFILE PICTURE WHEN A NEW RESUME IS PARSED
+      if (profilePic?.objectUrl) URL.revokeObjectURL(profilePic.objectUrl);
+      setProfilePic({ file: null, preview: null, objectUrl: null });
+      if (profilePicInputRef.current) profilePicInputRef.current.value = "";
+      // 🔼🔼🔼
 
       toast.success("Resume parsed successfully!");
 
-      // Optional: allow choosing the same file again (keeps your displayed name if you store it separately)
+      // Allow choosing the same resume file again
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e: any) {
       console.error("parse-resume failed:", e);
@@ -1056,16 +1090,43 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
 
 
+
+  // Keep this near your other handlers in page.tsx
+
   const handleProfilePicChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files?.[0]) {
-      const file = event.target.files[0];
-      setProfilePic({ preview: URL.createObjectURL(file), file });
-      toast.success('Profile picture selected.');
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Revoke any previous object URL to avoid leaks
+    if (profilePic.objectUrl) {
+      URL.revokeObjectURL(profilePic.objectUrl);
     }
+
+    const objectUrl = URL.createObjectURL(file);
+
+    setProfilePic({
+      file,
+      preview: objectUrl,   // use as <img src={profilePic.preview} />
+      objectUrl,            // track so we can revoke later
+    });
+
+    toast.success('Profile picture selected.');
   };
+
   const handleProfilePicRemove = () => {
-    if (profilePic.preview) URL.revokeObjectURL(profilePic.preview);
-    setProfilePic({ preview: '', file: null });
+    // Revoke current object URL (if any)
+    if (profilePic.objectUrl) {
+      URL.revokeObjectURL(profilePic.objectUrl);
+    }
+
+    // Clear state
+    setProfilePic({ file: null, preview: null, objectUrl: null });
+
+    // IMPORTANT: also clear the input value so the same file can be chosen again
+    if (profilePicInputRef.current) {
+      profilePicInputRef.current.value = '';
+    }
+
     toast.info('Profile picture removed.');
   };
 
@@ -2124,14 +2185,17 @@ const onResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
                 <CardContent>
                   {activeSection === 'personal' && (
+
                     <PersonalForm
                       data={resumeData.personal}
                       onChange={handlePersonalChange}
                       onPicChange={handleProfilePicChange}
                       onPicRemove={handleProfilePicRemove}
-                      picPreview={profilePic.preview}
+                      picPreview={profilePic.preview ?? undefined}   // ⬅️ fix
+                      inputRef={profilePicInputRef}
                     />
-                  )}
+                    )}
+
 
                   {activeSection === 'summary' && (
                     <SummaryForm
