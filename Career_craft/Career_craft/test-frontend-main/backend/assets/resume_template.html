@@ -1,0 +1,282 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ personal.name }}'s Resume</title>
+
+  <style>
+    /* Base typography */
+    body {
+      font-family: {{ styleOptions.fontFamily | default('Calibri, sans-serif') }};
+      font-size: {{ styleOptions.fontSize | default(11) }}pt;
+      line-height: 1.4;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    .accent-color { color: {{ styleOptions.accentColor | default('#34495e') }}; }
+
+    /* Header layout */
+    .header {
+      border-bottom: 1.5px solid #e5e7eb;
+      padding: 16px 24px 12px 24px;
+      margin-bottom: 16px;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-left, .header-right {
+      width: 140px;               /* fixed side columns so center truly centers */
+      display: flex;
+      align-items: center;
+    }
+    .header-left  { justify-content: flex-start; }
+    .header-right { justify-content: flex-end;  }
+
+    .header-center {
+      flex: 1;
+      text-align: center;
+    }
+    .header-center h1 {
+      margin: 0;
+      font-size: 2.4em;
+      font-weight: 700;
+    }
+
+    .logo {
+      max-width: 120px;
+      max-height: 40px;
+    }
+    .avatar {
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid #e5e7eb;
+    }
+
+    .contact {
+      text-align: center;
+      margin-top: 6px;
+      color: #4b5563;
+    }
+
+    /* Sections */
+    h2 {
+      font-size: 1.1em;
+      font-weight: 700;
+      border-bottom: 1.5px solid {{ styleOptions.accentColor | default('#34495e') }};
+      padding-bottom: 4px;
+      margin: 20px 24px 10px 24px;
+    }
+
+    .section {
+      margin: 0 24px 10px 24px;
+    }
+
+    .entry { margin-bottom: 10px; page-break-inside: avoid; }
+
+    .job-title, .degree, .project-title, .cert-name, .pub-title { font-weight: 700; }
+    .company, .institution, .project-date, .cert-issuer, .pub-authors { font-style: italic; color: #555; }
+
+    /* Tighten default element spacing */
+    p { margin: 0; padding: 0; }
+
+    /* Lists generated from rich text */
+    ul { margin: 0; padding: 0; list-style-position: inside; }
+    li { margin: 0; padding: 0; }
+
+    /* Preserve newlines for plain-text areas (skills) */
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      display: inline; /* so it stays inline with label */
+    }
+
+    /* Remove empty blocks WeasyPrint might leave */
+    div:empty, p:empty { display: none; }
+  </style>
+</head>
+<body>
+
+
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-row">
+      <div class="header-left">
+        {% if pamtenLogoSrc %}
+          <img class="logo" src="{{ pamtenLogoSrc }}" alt="Pamten Logo" />
+        {% endif %}
+      </div>
+
+      <div class="header-center">
+        <h1 class="accent-color">{{ personal.name }}</h1>
+      </div>
+
+      <div class="header-right">
+        {% if profilePicSrc %}
+          <img class="avatar" src="{{ profilePicSrc }}" alt="Profile photo" />
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="contact">
+      {% set parts = [] %}
+
+      {# email, phone #}
+      {% if personal.email %}{% set _ = parts.append(personal.email) %}{% endif %}
+      {% if personal.phone %}{% set _ = parts.append(personal.phone) %}{% endif %}
+
+      {# location #}
+      {% if personal.location %}{% set _ = parts.append(personal.location) %}{% endif %}
+
+      {# LinkedIn (right after location). Show the actual URL as text. #}
+      {% if personal.linkedin %}
+        {% set ln = personal.linkedin %}
+        {# ensure it has a protocol for href #}
+        {% if '://' not in ln %}{% set ln = 'https://' ~ ln %}{% endif %}
+        {# label without protocol #}
+        {% set label = ln|replace('https://','')|replace('http://','') %}
+        {% set _ = parts.append('<a href="' ~ ln ~ '" target="_blank" rel="noopener noreferrer" style="word-break:break-all;">' ~ label|e ~ '</a>') %}
+      {% endif %}
+
+
+
+
+
+      {# visa status (last) #}
+      {% set vs = (personal.legalStatus or '') %}
+      {# strip a leading "Visa Status: " if it somehow slips through #}
+      {% set vs = vs.replace('Visa Status: ', '') %}
+      {% if vs and vs != 'Prefer not to say' %}
+        {% set _ = parts.append('Visa Status: ' ~ vs) %}
+      {% endif %}
+
+
+
+      {{ parts | join(' | ') | safe }}
+    </p>
+    
+
+  </div>
+
+  <!-- Summary -->
+  {% if summary and summary|striptags|trim %}
+    <h2 class="accent-color">Summary</h2>
+    <div class="section">
+      <div>{{ summary | safe }}</div>
+    </div>
+  {% endif %}
+
+  <!-- Experience -->
+  {% if experience and experience[0].jobTitle %}
+    <h2 class="accent-color">Experience</h2>
+    <div class="section">
+      {% for exp in experience %}
+        <div class="entry">
+          <p><span class="job-title">{{ exp.jobTitle }}</span></p>
+          <p class="company">{{ exp.company }}{% if exp.dates %} | {{ exp.dates }}{% endif %}</p>
+          {% if exp.description and exp.description|striptags|trim %}
+            <div>{{ exp.description | safe }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Education -->
+  {% if education and education[0].degree %}
+    <h2 class="accent-color">Education</h2>
+    <div class="section">
+      {% for edu in education %}
+        <div class="entry">
+          <p><span class="degree">{{ edu.degree }}</span>, <span class="institution">{{ edu.institution }}</span></p>
+          <p class="company">
+            {{ edu.graduationYear }}{% if edu.gpa %} | GPA: {{ edu.gpa }}{% endif %}
+          </p>
+          {% if edu.achievements and edu.achievements|striptags|trim %}
+            <div>{{ edu.achievements | safe }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Skills -->
+  {% if skills and skills[0].category %}
+    <h2 class="accent-color">Skills</h2>
+    <div class="section">
+      {% for skill in skills %}
+        <div class="entry">
+          <span class="skills-category" style="font-weight:700">{{ skill.category }}:</span>
+          <pre>{{ skill.skills_list }}</pre>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Projects -->
+  {% if projects and projects[0].title %}
+    <h2 class="accent-color">Projects</h2>
+    <div class="section">
+      {% for proj in projects %}
+        <div class="entry">
+          <p><span class="project-title">{{ proj.title }}</span>{% if proj.date %} <span class="project-date">({{ proj.date }})</span>{% endif %}</p>
+          {% if proj.description and proj.description|striptags|trim %}
+            <div>{{ proj.description | safe }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Publications -->
+  {% if publications and publications[0].title %}
+    <h2 class="accent-color">Publications</h2>
+    <div class="section">
+      {% for pub in publications %}
+        <div class="entry">
+          <p><span class="pub-title">{{ pub.title }}</span>{% if pub.date %} ({{ pub.date }}){% endif %}</p>
+          <p class="pub-authors">{{ pub.authors }}{% if pub.journal %} - <i>{{ pub.journal }}</i>{% endif %}</p>
+          {% if pub.link %}
+            <p><small>Link: {{ pub.link }}</small></p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Certifications -->
+  {% if certifications and certifications[0].name %}
+    <h2 class="accent-color">Certifications</h2>
+    <div class="section">
+      {% for cert in certifications %}
+        <div class="entry">
+          <p><span class="cert-name">{{ cert.name }}</span></p>
+          <p class="cert-issuer">
+            {{ cert.issuer }}{% if cert.date %} | {{ cert.date }}{% endif %}
+          </p>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</body>
+</html>
+
+
