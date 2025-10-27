@@ -1,0 +1,31 @@
+# Core Web Framework
+fastapi==0.115.0
+uvicorn==0.32.0
+python-multipart==0.0.12
+
+# NLP and Machine Learning
+spacy==3.7.2
+sentence-transformers==3.2.1
+torch>=2.2.0
+scikit-learn==1.5.2
+
+# Resume and Document Parsing
+PyMuPDF==1.24.9         # For PDF reading (fitz)
+python-docx==1.1.2      # For DOCX reading
+python-dateutil==2.9.0  # Date parsing and manipulation
+
+# Skill Extraction
+skillNer==1.0.3
+
+# Utility Libraries
+pandas==2.2.3
+numpy==1.26.4
+
+# Testing
+pytest==8.3.3
+httpx==0.27.0           # Used by fastapi.testclient under the hood
+
+# Optional: For CSV streaming, caching, and other helpers
+aiofiles==24.1.0
+requests==2.32.3
+
