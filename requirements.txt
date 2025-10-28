@@ -31,3 +31,4 @@ requests==2.32.3
 
 # Deployment (optional, for CI/CD or production)
 gunicorn==23.0.0
+uvicorn==0.29.0
